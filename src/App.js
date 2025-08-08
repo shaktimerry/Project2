@@ -7,7 +7,7 @@ function App() {
   const [error, setError] = useState(null);
 
   // Replace this with your actual API Gateway endpoint for the Lambda function
-  const API_URL = "https://ephn4vgj2f.execute-api.eu-north-1.amazonaws.com/Dev/Monitor_status";
+  const API_URL = "https://lpn9up6lf8.execute-api.eu-north-1.amazonaws.com/dev/monitoring";
 
   useEffect(() => {
     async function fetchData() {
