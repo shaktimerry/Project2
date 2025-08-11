@@ -6,6 +6,7 @@ export default function ServerMonitoringDashboard() {
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const apiCall = process.env.REACT_APP_REPEATED_API_CALL;
 
   // Replace with your actual Lambda API Gateway endpoint
   const API_URL = "https://lpn9up6lf8.execute-api.eu-north-1.amazonaws.com/dev/monitoring";
@@ -53,8 +54,10 @@ export default function ServerMonitoringDashboard() {
 
   useEffect(() => {
     fetchMetrics();
-    const interval = setInterval(fetchMetrics, 10000); // every 10 sec
-    return () => clearInterval(interval);
+    if (apiCall === "true") {
+      const interval = setInterval(fetchMetrics, 10000); // every 10 sec
+      return () => clearInterval(interval);
+    }
   }, []);
 
   if (loading && !metrics) return <p className="p-8 text-gray-600">Loading metrics...</p>;
@@ -83,8 +86,8 @@ export default function ServerMonitoringDashboard() {
             metrics.dbQueryExecutionTime < 150
               ? "text-green-500"
               : metrics.dbQueryExecutionTime < 300
-              ? "text-yellow-500"
-              : "text-red-500"
+                ? "text-yellow-500"
+                : "text-red-500"
           }
         />
         <Card
@@ -94,8 +97,8 @@ export default function ServerMonitoringDashboard() {
             metrics.throttleOperationCount === 0
               ? "text-green-500"
               : metrics.throttleOperationCount < 3
-              ? "text-yellow-500"
-              : "text-red-500"
+                ? "text-yellow-500"
+                : "text-red-500"
           }
         />
         <Card
@@ -105,8 +108,8 @@ export default function ServerMonitoringDashboard() {
             metrics.lambdaAvgExecutionTime < 300
               ? "text-green-500"
               : metrics.lambdaAvgExecutionTime < 600
-              ? "text-yellow-500"
-              : "text-red-500"
+                ? "text-yellow-500"
+                : "text-red-500"
           }
         />
       </div>
