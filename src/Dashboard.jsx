@@ -9,7 +9,8 @@ import {
   ResponsiveContainer,
   PieChart,
   Pie,
-  Cell
+  Cell,
+  Legend,
 } from "recharts";
 
 export default function ServerMonitoringDashboard() {
@@ -17,15 +18,19 @@ export default function ServerMonitoringDashboard() {
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [sentimentData, setSentimentData] = useState(null);
+  const [sentimentData, setSentimentData] = useState([]);
+  const [loadingSentiment, setLoadingSentiment] = useState(true);
+  const [errorSentiment, setErrorSentiment] = useState(null);
 
   const apiCall = process.env.REACT_APP_REPEATED_API_CALL;
 
   // Existing monitoring API
-  const API_URL = "https://lpn9up6lf8.execute-api.eu-north-1.amazonaws.com/dev/monitoring";
+  const API_URL =
+    "https://lpn9up6lf8.execute-api.eu-north-1.amazonaws.com/dev/monitoring";
 
   // Aggregator API for customer feedback
-  const FEEDBACK_API_URL = "https://lpn9up6lf8.execute-api.eu-north-1.amazonaws.com/dev/feedback-summary";
+  const FEEDBACK_API_URL =
+    "https://lpn9up6lf8.execute-api.eu-north-1.amazonaws.com/dev/feedback-summary";
 
   // Fetch server metrics
   const fetchMetrics = async () => {
@@ -35,7 +40,8 @@ export default function ServerMonitoringDashboard() {
       const response = await fetch(API_URL);
       if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
       const data = await response.json();
-      const parsedData = typeof data.body === "string" ? JSON.parse(data.body) : data;
+      const parsedData =
+        typeof data.body === "string" ? JSON.parse(data.body) : data;
 
       const newMetrics = {
         availability: parsedData.Availability,
@@ -48,17 +54,16 @@ export default function ServerMonitoringDashboard() {
       setMetrics(newMetrics);
 
       // Update history with timestamps
-      setHistory(prev => {
+      setHistory((prev) => {
         const updated = [
           ...prev,
           {
             time: new Date().toLocaleTimeString(),
-            ...newMetrics
-          }
+            ...newMetrics,
+          },
         ];
         return updated.slice(-60); // Keep last 60 entries
       });
-
     } catch (err) {
       setError(err.message);
     } finally {
@@ -69,18 +74,27 @@ export default function ServerMonitoringDashboard() {
   // Fetch customer feedback sentiment data
   const fetchSentimentData = async () => {
     try {
+      setLoadingSentiment(true);
+      setErrorSentiment(null);
+
       const response = await fetch(FEEDBACK_API_URL);
       if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
-      const data = await response.json();
+      const raw = await response.json();
+
+      // ✅ Fix: parse string body if necessary
+      const parsed =
+        typeof raw.body === "string" ? JSON.parse(raw.body) : raw;
 
       const chartData = [
-        { name: "Positive", value: data.Positive || 0 },
-        { name: "Negative", value: data.Negative || 0 },
-        { name: "Neutral", value: data.Neutral || 0 }
+        { name: "Positive", value: parsed.Positive || 0 },
+        { name: "Negative", value: parsed.Negative || 0 },
+        { name: "Neutral", value: parsed.Neutral || 0 },
       ];
       setSentimentData(chartData);
     } catch (err) {
-      console.error("Failed to fetch sentiment data:", err);
+      setErrorSentiment(err.message);
+    } finally {
+      setLoadingSentiment(false);
     }
   };
 
@@ -98,7 +112,8 @@ export default function ServerMonitoringDashboard() {
     }
   }, []);
 
-  if (loading && !metrics) return <p className="p-8 text-gray-600">Loading metrics...</p>;
+  if (loading && !metrics)
+    return <p className="p-8 text-gray-600">Loading metrics...</p>;
   if (error) return <p className="p-8 text-red-500">Error: {error}</p>;
 
   return (
@@ -124,8 +139,8 @@ export default function ServerMonitoringDashboard() {
             metrics.dbQueryExecutionTime < 150
               ? "text-green-500"
               : metrics.dbQueryExecutionTime < 300
-                ? "text-yellow-500"
-                : "text-red-500"
+              ? "text-yellow-500"
+              : "text-red-500"
           }
         />
         <Card
@@ -135,8 +150,8 @@ export default function ServerMonitoringDashboard() {
             metrics.throttleOperationCount === 0
               ? "text-green-500"
               : metrics.throttleOperationCount < 3
-                ? "text-yellow-500"
-                : "text-red-500"
+              ? "text-yellow-500"
+              : "text-red-500"
           }
         />
         <Card
@@ -146,24 +161,42 @@ export default function ServerMonitoringDashboard() {
             metrics.lambdaAvgExecutionTime < 300
               ? "text-green-500"
               : metrics.lambdaAvgExecutionTime < 600
-                ? "text-yellow-500"
-                : "text-red-500"
+              ? "text-yellow-500"
+              : "text-red-500"
           }
         />
       </div>
 
       {/* Existing Line Charts */}
       <div className="grid gap-10 md:grid-cols-2">
-        <MetricChart data={history} dataKey="dbQueryExecutionTime" label="DB Query Execution Time (ms)" />
-        <MetricChart data={history} dataKey="lambdaAvgExecutionTime" label="Lambda Avg Execution Time (ms)" />
-        <MetricChart data={history} dataKey="throttleOperationCount" label="Throttle Operation Count" />
+        <MetricChart
+          data={history}
+          dataKey="dbQueryExecutionTime"
+          label="DB Query Execution Time (ms)"
+        />
+        <MetricChart
+          data={history}
+          dataKey="lambdaAvgExecutionTime"
+          label="Lambda Avg Execution Time (ms)"
+        />
+        <MetricChart
+          data={history}
+          dataKey="throttleOperationCount"
+          label="Throttle Operation Count"
+        />
         <MetricChart data={history} dataKey="statusCode" label="Status Code" />
       </div>
 
       {/* New Pie Chart for Customer Feedback Sentiment */}
       <div className="bg-white p-6 rounded-xl shadow-md mt-10">
         <h2 className="text-lg font-semibold mb-4">Customer Feedback Sentiment</h2>
-        {sentimentData ? (
+        {loadingSentiment ? (
+          <p className="text-gray-500">Loading sentiment data...</p>
+        ) : errorSentiment ? (
+          <p className="text-red-500">Error: {errorSentiment}</p>
+        ) : sentimentData.length === 0 ? (
+          <p className="text-gray-500">No sentiment data available</p>
+        ) : (
           <ResponsiveContainer width="100%" height={300}>
             <PieChart>
               <Pie
@@ -180,19 +213,18 @@ export default function ServerMonitoringDashboard() {
                     key={`cell-${index}`}
                     fill={
                       entry.name === "Positive"
-                        ? "#10B981"
+                        ? "#10B981" // green
                         : entry.name === "Negative"
-                        ? "#EF4444"
-                        : "#FBBF24"
+                        ? "#EF4444" // red
+                        : "#9CA3AF" // gray
                     }
                   />
                 ))}
               </Pie>
               <Tooltip />
+              <Legend />
             </PieChart>
           </ResponsiveContainer>
-        ) : (
-          <p className="text-gray-500">Loading sentiment data...</p>
         )}
       </div>
     </div>
@@ -220,7 +252,13 @@ function MetricChart({ data, dataKey, label }) {
           <XAxis dataKey="time" interval="preserveStartEnd" />
           <YAxis />
           <Tooltip />
-          <Line type="monotone" dataKey={dataKey} stroke="#3b82f6" strokeWidth={2} dot={false} />
+          <Line
+            type="monotone"
+            dataKey={dataKey}
+            stroke="#3b82f6"
+            strokeWidth={2}
+            dot={false}
+          />
         </LineChart>
       </ResponsiveContainer>
     </div>
