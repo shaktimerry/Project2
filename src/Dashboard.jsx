@@ -1,24 +1,39 @@
 import React, { useEffect, useState } from "react";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell
+} from "recharts";
 
 export default function ServerMonitoringDashboard() {
   const [metrics, setMetrics] = useState(null);
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [sentimentData, setSentimentData] = useState(null);
+
   const apiCall = process.env.REACT_APP_REPEATED_API_CALL;
 
-  // Replace with your actual Lambda API Gateway endpoint
+  // Existing monitoring API
   const API_URL = "https://lpn9up6lf8.execute-api.eu-north-1.amazonaws.com/dev/monitoring";
 
+  // Aggregator API for customer feedback
+  const FEEDBACK_API_URL = "https://lpn9up6lf8.execute-api.eu-north-1.amazonaws.com/dev/feedback-summary";
+
+  // Fetch server metrics
   const fetchMetrics = async () => {
     try {
       setLoading(true);
       setError(null);
       const response = await fetch(API_URL);
-      if (!response.ok) {
-        throw new Error(`HTTP error! Status: ${response.status}`);
-      }
+      if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
       const data = await response.json();
       const parsedData = typeof data.body === "string" ? JSON.parse(data.body) : data;
 
@@ -41,8 +56,7 @@ export default function ServerMonitoringDashboard() {
             ...newMetrics
           }
         ];
-        // Keep last 60 entries (1 hour at 1-min intervals if polling every 60 sec)
-        return updated.slice(-60);
+        return updated.slice(-60); // Keep last 60 entries
       });
 
     } catch (err) {
@@ -52,11 +66,35 @@ export default function ServerMonitoringDashboard() {
     }
   };
 
+  // Fetch customer feedback sentiment data
+  const fetchSentimentData = async () => {
+    try {
+      const response = await fetch(FEEDBACK_API_URL);
+      if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
+      const data = await response.json();
+
+      const chartData = [
+        { name: "Positive", value: data.Positive || 0 },
+        { name: "Negative", value: data.Negative || 0 },
+        { name: "Neutral", value: data.Neutral || 0 }
+      ];
+      setSentimentData(chartData);
+    } catch (err) {
+      console.error("Failed to fetch sentiment data:", err);
+    }
+  };
+
   useEffect(() => {
     fetchMetrics();
+    fetchSentimentData();
+
     if (apiCall === "true") {
-      const interval = setInterval(fetchMetrics, 10000); // every 10 sec
-      return () => clearInterval(interval);
+      const intervalMetrics = setInterval(fetchMetrics, 10000);
+      const intervalSentiment = setInterval(fetchSentimentData, 10000);
+      return () => {
+        clearInterval(intervalMetrics);
+        clearInterval(intervalSentiment);
+      };
     }
   }, []);
 
@@ -114,12 +152,48 @@ export default function ServerMonitoringDashboard() {
         />
       </div>
 
-      {/* Charts */}
+      {/* Existing Line Charts */}
       <div className="grid gap-10 md:grid-cols-2">
         <MetricChart data={history} dataKey="dbQueryExecutionTime" label="DB Query Execution Time (ms)" />
         <MetricChart data={history} dataKey="lambdaAvgExecutionTime" label="Lambda Avg Execution Time (ms)" />
         <MetricChart data={history} dataKey="throttleOperationCount" label="Throttle Operation Count" />
         <MetricChart data={history} dataKey="statusCode" label="Status Code" />
+      </div>
+
+      {/* New Pie Chart for Customer Feedback Sentiment */}
+      <div className="bg-white p-6 rounded-xl shadow-md mt-10">
+        <h2 className="text-lg font-semibold mb-4">Customer Feedback Sentiment</h2>
+        {sentimentData ? (
+          <ResponsiveContainer width="100%" height={300}>
+            <PieChart>
+              <Pie
+                data={sentimentData}
+                dataKey="value"
+                nameKey="name"
+                cx="50%"
+                cy="50%"
+                outerRadius={100}
+                label
+              >
+                {sentimentData.map((entry, index) => (
+                  <Cell
+                    key={`cell-${index}`}
+                    fill={
+                      entry.name === "Positive"
+                        ? "#10B981"
+                        : entry.name === "Negative"
+                        ? "#EF4444"
+                        : "#FBBF24"
+                    }
+                  />
+                ))}
+              </Pie>
+              <Tooltip />
+            </PieChart>
+          </ResponsiveContainer>
+        ) : (
+          <p className="text-gray-500">Loading sentiment data...</p>
+        )}
       </div>
     </div>
   );
